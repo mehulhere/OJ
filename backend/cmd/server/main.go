@@ -714,6 +714,67 @@ func withCORS(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
+// This is a middleware to validate JWT from HTTP-only cookie
+func jwtAuthMiddleware(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		// Get the cookie named "authToken"
+		cookie, err := r.Cookie("authToken")
+		if err != nil {
+			if err == http.ErrNoCookie {
+				// If the cookie is not set, return an unauthorized status
+				sendJSONError(w, "Unauthorized: No auth token cookie provided", http.StatusUnauthorized)
+				return
+			}
+			// For any other type of error, return a bad request status
+			log.Printf("Error getting auth token cookie: %v", err)
+			sendJSONError(w, "Bad Request: Error reading auth token cookie", http.StatusBadRequest)
+			return
+		}
+
+		// Get the JWT string from the cookie
+		tokenString := cookie.Value
+
+		// Declare the claims
+		claims := &Claims{}
+
+		// Parse the JWT
+		tkn, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
+			// Ensure the token is signed with HS256
+			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+				return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+			}
+			// Return the jwtKey for validation
+			// Ensure jwtKey is initialized (e.g., in main or init)
+			if jwtKey == nil {
+				// This case should ideally not happen if main loads the key correctly
+				log.Println("CRITICAL: jwtKey is nil during token validation.")
+				return nil, fmt.Errorf("server configuration error")
+			}
+			return jwtKey, nil
+		})
+
+		if err != nil {
+			log.Printf("JWT validation failed: %v", err)
+			// Handle token parsing or validation errors (e.g., expired, invalid signature)
+			sendJSONError(w, "Unauthorized: Invalid or expired auth token", http.StatusUnauthorized)
+			return
+		}
+
+		// Check if the token is valid
+		if !tkn.Valid {
+			log.Println("JWT token is not valid after parsing.")
+			sendJSONError(w, "Unauthorized: Invalid auth token", http.StatusUnauthorized)
+			return
+		}
+
+		// Token is valid, call the next handler
+		// Optionally, you can add the claims to the request context here
+		// ctx := context.WithValue(r.Context(), "claims", claims)
+		// next.ServeHTTP(w, r.WithContext(ctx))
+		next.ServeHTTP(w, r)
+	}
+}
+
 func main() {
 	err := godotenv.Load()
 	if err != nil {
@@ -741,7 +802,7 @@ func main() {
 	http.HandleFunc("/problems", withCORS(getProblemsHandler))
 	http.HandleFunc("/problems/", withCORS(getProblemHandler))
 	http.HandleFunc("/testcases", withCORS(addTestCaseHandler))
-	http.HandleFunc("/execute", withCORS(executeCodeHandler))
+	http.HandleFunc("/execute", withCORS(jwtAuthMiddleware(executeCodeHandler)))
 
 	log.Println("Server listening on port 8080. Allowed origin for CORS: http://localhost:3000")
 	log.Fatal(http.ListenAndServe(":8080", nil))

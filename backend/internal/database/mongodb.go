@@ -49,37 +49,48 @@ func ConnectDB(uri string) error {
 	DB = client
 	fmt.Println("Successfully connected to MongoDB!")
 
-	// Ensure unique username index
-	err = EnsureUniqueUsername("OJ", "users")
+	// Ensure unique indexes
+	err = EnsureUniqueIndex("OJ", "users", "username")
 	if err != nil {
 		log.Fatalf("Failed to ensure unique username index: %v", err)
+	}
+
+	err = EnsureUniqueIndex("OJ", "users", "email")
+	if err != nil {
+		log.Fatalf("Failed to ensure unique email index: %v", err)
 	}
 
 	return nil
 }
 
-func EnsureUniqueUsername(dbName string, collectionName string) error {
+// Function to ensure a unique index on a specified field
+func EnsureUniqueIndex(dbName string, collectionName string, fieldKey string) error {
 	if DB == nil {
 		return fmt.Errorf("mongodb client is not initialized")
 	}
 
-	userCollection := DB.Database(dbName).Collection(collectionName)
+	collection := DB.Database(dbName).Collection(collectionName)
 
-	// Create a unique index on the username field
+	// Create a unique index on the specified field
 	indexModel := mongo.IndexModel{
-		Keys:    bson.D{{Key: "username", Value: 1}}, // Index on username and sort in ascending
-		Options: options.Index().SetUnique(true),     // Uniqueness option
+		Keys:    bson.D{{Key: fieldKey, Value: 1}}, // Index on the specified field and sort in ascending
+		Options: options.Index().SetUnique(true),   // Uniqueness option
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	_, err := userCollection.Indexes().CreateOne(ctx, indexModel)
+	_, err := collection.Indexes().CreateOne(ctx, indexModel)
 	if err != nil {
-		return fmt.Errorf("failed to create unique index on username: %v", err)
+		// Check if the error is due to the index already existing
+		if mongo.IsDuplicateKeyError(err) {
+			fmt.Printf("Unique index on '%s' already exists.\n", fieldKey)
+			return nil // Index already exists, consider it successful
+		}
+		return fmt.Errorf("failed to create unique index on '%s': %v", fieldKey, err)
 	}
 
-	fmt.Println("Successfully created unique index on username.")
+	fmt.Printf("Successfully created unique index on '%s'.\n", fieldKey)
 
 	return nil
 }

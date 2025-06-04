@@ -209,7 +209,7 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 
 	if payload.Email == "" || payload.Password == "" {
-		sendJSONError(w, "Email and password are required.", http.StatusBadRequest)
+		sendJSONError(w, "Username/Email and password are required.", http.StatusBadRequest)
 		return
 	}
 
@@ -218,10 +218,29 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 
 	var foundUser models.User
-	err = usersCollection.FindOne(ctx, primitive.M{"email": payload.Email}).Decode(&foundUser)
+
+	// Determine if the input is likely an email or a username
+	// A simple check for '@' is used here, but a more robust validation (like isValidEmail) could be used.
+	isEmail := strings.Contains(payload.Email, "@")
+
+	var filter primitive.M
+	if isEmail {
+		filter = primitive.M{"email": payload.Email}
+		err = usersCollection.FindOne(ctx, filter).Decode(&foundUser)
+		if err == mongo.ErrNoDocuments {
+			// Not found by email, now try by username
+			filter = primitive.M{"username": payload.Email}
+			err = usersCollection.FindOne(ctx, filter).Decode(&foundUser)
+		}
+	} else {
+		// Not an email, search by username
+		filter = primitive.M{"username": payload.Email}
+		err = usersCollection.FindOne(ctx, filter).Decode(&foundUser)
+	}
+
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
-			sendJSONError(w, "Invalid email or password.", http.StatusUnauthorized)
+			sendJSONError(w, "Invalid username/email or password.", http.StatusUnauthorized)
 			return
 		}
 		log.Println("Error finding user:", err)
@@ -231,7 +250,7 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 
 	err = bcrypt.CompareHashAndPassword([]byte(foundUser.Password), []byte(payload.Password))
 	if err != nil {
-		sendJSONError(w, "Invalid email or password.", http.StatusUnauthorized)
+		sendJSONError(w, "Invalid username/email or password. ", http.StatusUnauthorized)
 		return
 	}
 

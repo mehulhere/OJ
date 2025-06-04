@@ -66,22 +66,25 @@ export default function LoginPage() {
                 return;
             }
 
-            if ('token' in responseData) {
+            // Backend now sets the JWT as an HTTP-only cookie.
+            // We don't need to extract the token from responseData.
+            // Just confirm the response was successful.
+            if (response.ok) { // Check for success status after handling non-ok
                 setSuccessMessage(responseData.message || 'Login successful!');
-                console.log('Login successful:', responseData);
-                // TODO: Store the token securely (e.g., localStorage, HttpOnly cookie via backend, or state management)
-                // localStorage.setItem('authToken', responseData.token);
-                // TODO: Store user info if needed
-                // localStorage.setItem('userInfo', JSON.stringify(responseData.user));
-
-                // Clear form
-                setUsernameOrEmail('');
-                setPassword('');
+                console.log('Login successful');
 
                 // TODO: Redirect to a protected page or dashboard
                 // router.push('/dashboard'); // Example redirect
+
+                // Clear form fields
+                setUsernameOrEmail('');
+                setPassword('');
+
             } else {
-                setError("Login succeeded, but the response format was unexpected.");
+                // This case should technically be covered by !response.ok above,
+                // but as a fallback or for clarity:
+                const errorMessage = (responseData as ErrorResponse)?.message || `Login failed with status: ${response.status}`;
+                setError(errorMessage);
             }
 
         } catch (err) {

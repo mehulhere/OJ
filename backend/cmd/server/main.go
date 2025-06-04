@@ -178,16 +178,28 @@ func registerHandler(w http.ResponseWriter, r *http.Request) {
 	tokenString, err := token.SignedString(jwtKey)
 	if err != nil {
 		log.Printf("Failed to sign JWT token: %v\n", err)
-		sendJSONError(w, "User registered, but failed to generate token.", http.StatusInternalServerError)
+		sendJSONError(w, "User registered, but server configuration error prevented token generation.", http.StatusInternalServerError)
 		return
 	}
 
+	// Set the JWT as an HTTP-only cookie
+	http.SetCookie(w, &http.Cookie{
+		Name:     "authToken", // Name of the cookie
+		Value:    tokenString, // The JWT token string
+		Expires:  expirationTime,
+		HttpOnly: true,                 // Make it HTTP-only
+		Secure:   false,                // Set to true in production with HTTPS
+		SameSite: http.SameSiteLaxMode, // Recommended for CSRF protection
+		Path:     "/",                  // Make the cookie available to all paths
+	})
+
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
+	// Send a success message without the token in the body
 	response := map[string]interface{}{
 		"message":    "User Registered Successfully",
 		"insertedID": userIDHex,
-		"token":      tokenString,
+		// Do NOT include the token in the response body
 	}
 	json.NewEncoder(w).Encode(response)
 	log.Printf("User registered: %s (Firstname: %s, Lastname: %s, Email: %s, UserID: %s)\n", newUser.Username, newUser.Firstname, newUser.Lastname, newUser.Email, userIDHex)
@@ -283,11 +295,23 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Set the JWT as an HTTP-only cookie
+	http.SetCookie(w, &http.Cookie{
+		Name:     "authToken", // Name of the cookie
+		Value:    tokenString, // The JWT token string
+		Expires:  expirationTime,
+		HttpOnly: true,                 // Make it HTTP-only
+		Secure:   false,                // Set to true in production with HTTPS
+		SameSite: http.SameSiteLaxMode, // Recommended for CSRF protection
+		Path:     "/",                  // Make the cookie available to all paths
+	})
+
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
+	// Send a success message without the token in the body
 	response := map[string]interface{}{
 		"message": "Login Successful",
-		"token":   tokenString,
+		// Do NOT include the token in the response body
 		"user": map[string]string{
 			"user_id":   foundUser.ID.Hex(),
 			"username":  foundUser.Username,
@@ -443,7 +467,7 @@ func getProblemHandler(w http.ResponseWriter, r *http.Request) {
 	log.Println("Successfully retrieved problem:", responsePayload.Title, "with", len(responsePayload.SampleTestCases), "sample test cases.")
 }
 
-func addTestCaseHandler(w http.ResponseWriter, r *http.Request) {
+func addTestCaseHandler(w http.ResponseWriter, r *http.Request) { // Only allowed for admins
 	if r.Method != http.MethodPost {
 		sendJSONError(w, "Method not allowed. Only POST is accepted.", http.StatusMethodNotAllowed)
 		return

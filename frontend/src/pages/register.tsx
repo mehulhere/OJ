@@ -74,9 +74,12 @@ export default function Register() {
                 return;
             }
 
-            if ('token' in responseData) {
-                setSuccess(`User ${username} registered successfully!`)
-                console.log("registration successful")
+            if (response.ok) {
+                setSuccess(`User ${username} registered successfully!`);
+                console.log("registration successful");
+
+                // TODO: Redirect to a protected page or dashboard or login page
+                // router.push('/dashboard'); // Example redirect
 
                 // Clear form fields
                 setFirstname('');
@@ -87,7 +90,8 @@ export default function Register() {
                 setConfirmPassword('');
             }
             else {
-                setError('Token not found');
+                const errorMessage = (responseData as ErrorResponse)?.message || `Registration failed with status: ${response.status}`;
+                setError(errorMessage);
             }
         } catch (error) {
             console.error('Registration error:', error);

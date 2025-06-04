@@ -107,6 +107,11 @@ func registerHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if len(payload.Username) < 3 { // Add to Frontend Validation
+		sendJSONError(w, "Username must be at least 3 characters long.", http.StatusBadRequest)
+		return
+	}
+
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(payload.Password), bcrypt.DefaultCost)
 	if err != nil {
 		log.Println("Failed to hash password:", err)

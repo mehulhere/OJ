@@ -42,6 +42,12 @@ export default function Register() {
             return;
         }
 
+        if (username.length < 3) {
+            setError('Username must be at least 3 characters long');
+            setIsLoading(false);
+            return;
+        }
+
         const registrationData = {
             firstname,
             lastname,

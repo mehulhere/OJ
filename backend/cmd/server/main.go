@@ -760,7 +760,7 @@ func jwtAuthMiddleware(next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 
-		// Check if the token is valid
+		// Check if the token is valid (like not expired)
 		if !tkn.Valid {
 			log.Println("JWT token is not valid after parsing.")
 			sendJSONError(w, "Unauthorized: Invalid auth token", http.StatusUnauthorized)

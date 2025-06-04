@@ -1,6 +1,8 @@
-package main
+package handlers
 
 import (
+	"backend/internal/middleware"
+	"backend/internal/types"
 	"bytes"
 	"encoding/json"
 	"fmt"
@@ -51,7 +53,7 @@ func getCookie(rr *httptest.ResponseRecorder, name string) *http.Cookie {
 func TestRegisterHandler_Success(t *testing.T) {
 	// Note: This test requires a clean state (user with this email/username doesn't exist)
 	// or a proper test database setup/teardown.
-	regPayload := RegisterationPayload{
+	regPayload := types.RegisterationPayload{
 		Firstname: "Test",
 		Lastname:  "User",
 		Username:  fmt.Sprintf("testuser_%d", time.Now().UnixNano()),         // Use unique username
@@ -66,7 +68,7 @@ func TestRegisterHandler_Success(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 
 	rr := httptest.NewRecorder()
-	handler := http.HandlerFunc(withCORS(registerHandler)) // Test with CORS
+	handler := http.HandlerFunc(middleware.WithCORS(RegisterHandler)) // Test with CORS
 
 	handler.ServeHTTP(rr, req)
 
@@ -119,7 +121,7 @@ func TestRegisterHandler_Success(t *testing.T) {
 
 func TestRegisterHandler_ValidationErrors(t *testing.T) {
 	// Test case: missing required fields
-	regPayload := RegisterationPayload{
+	regPayload := types.RegisterationPayload{
 		Firstname: "Test",
 		Lastname:  "User",
 		Username:  "testuser",
@@ -134,7 +136,7 @@ func TestRegisterHandler_ValidationErrors(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 
 	rr := httptest.NewRecorder()
-	handler := http.HandlerFunc(registerHandler)
+	handler := http.HandlerFunc(middleware.WithCORS(RegisterHandler))
 
 	handler.ServeHTTP(rr, req)
 
@@ -159,7 +161,7 @@ func TestRegisterHandler_ValidationErrors(t *testing.T) {
 func TestRegisterHandler_DuplicateUser(t *testing.T) {
 	// Note: This test requires a user to already exist with the provided email/username.
 	// You might need to register a user first in a setup phase.
-	regPayload := RegisterationPayload{
+	regPayload := types.RegisterationPayload{
 		Firstname: "Existing",
 		Lastname:  "User",
 		Username:  "existing_test_user",   // Use an existing username
@@ -174,7 +176,7 @@ func TestRegisterHandler_DuplicateUser(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 
 	rr := httptest.NewRecorder()
-	handler := http.HandlerFunc(registerHandler)
+	handler := http.HandlerFunc(middleware.WithCORS(RegisterHandler))
 
 	handler.ServeHTTP(rr, req)
 
@@ -197,7 +199,7 @@ func TestRegisterHandler_DuplicateUser(t *testing.T) {
 // Note: For TestLoginHandler_Success, you would need to ensure a user exists in the DB first.
 // This test assumes a user "testuser@example.com" with password "password123" exists.
 func TestLoginHandler_Success(t *testing.T) {
-	loginPayload := LoginPayload{
+	loginPayload := types.LoginPayload{
 		Email:    "testuser@example.com", // Use existing user's email or username
 		Password: "password123",          // Use existing user's password
 	}
@@ -209,7 +211,7 @@ func TestLoginHandler_Success(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 
 	rr := httptest.NewRecorder()
-	handler := http.HandlerFunc(withCORS(loginHandler)) // Test with CORS
+	handler := http.HandlerFunc(middleware.WithCORS(LoginHandler)) // Test with CORS
 
 	handler.ServeHTTP(rr, req)
 
@@ -260,7 +262,7 @@ func TestLoginHandler_Success(t *testing.T) {
 }
 
 func TestLoginHandler_InvalidCredentials(t *testing.T) {
-	loginPayload := LoginPayload{
+	loginPayload := types.LoginPayload{
 		Email:    "nonexistent@example.com", // User that doesn't exist
 		Password: "wrongpassword",
 	}
@@ -272,7 +274,7 @@ func TestLoginHandler_InvalidCredentials(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 
 	rr := httptest.NewRecorder()
-	handler := http.HandlerFunc(loginHandler)
+	handler := http.HandlerFunc(middleware.WithCORS(LoginHandler))
 
 	handler.ServeHTTP(rr, req)
 
@@ -293,7 +295,7 @@ func TestLoginHandler_InvalidCredentials(t *testing.T) {
 }
 
 func TestLoginHandler_MissingFields(t *testing.T) {
-	loginPayload := LoginPayload{
+	loginPayload := types.LoginPayload{
 		Email:    "testuser@example.com",
 		Password: "", // Missing password
 	}
@@ -305,7 +307,7 @@ func TestLoginHandler_MissingFields(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 
 	rr := httptest.NewRecorder()
-	handler := http.HandlerFunc(loginHandler)
+	handler := http.HandlerFunc(middleware.WithCORS(LoginHandler))
 
 	handler.ServeHTTP(rr, req)
 

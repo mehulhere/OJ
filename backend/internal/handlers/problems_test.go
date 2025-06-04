@@ -1,4 +1,4 @@
-package main
+package handlers
 
 import (
 	"encoding/json"
@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"backend/internal/middleware"
 	"backend/internal/models"
 
 	"github.com/joho/godotenv"
@@ -32,7 +33,7 @@ func TestGetProblemsHandler_Success(t *testing.T) {
 	}
 
 	rr := httptest.NewRecorder()
-	handler := http.HandlerFunc(withCORS(getProblemsHandler)) // Test with CORS
+	handler := http.HandlerFunc(middleware.WithCORS(GetProblemsHandler)) // Test with CORS
 
 	handler.ServeHTTP(rr, req)
 
@@ -77,7 +78,7 @@ func TestGetProblemHandler_Success(t *testing.T) {
 	}
 
 	rr := httptest.NewRecorder()
-	handler := http.HandlerFunc(withCORS(getProblemHandler)) // Test with CORS
+	handler := http.HandlerFunc(middleware.WithCORS(GetProblemHandler)) // Test with CORS
 
 	handler.ServeHTTP(rr, req)
 
@@ -122,7 +123,7 @@ func TestGetProblemHandler_NotFound(t *testing.T) {
 	}
 
 	rr := httptest.NewRecorder()
-	handler := http.HandlerFunc(getProblemHandler)
+	handler := http.HandlerFunc(middleware.WithCORS(GetProblemHandler))
 
 	handler.ServeHTTP(rr, req)
 

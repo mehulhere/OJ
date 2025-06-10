@@ -25,13 +25,13 @@ import (
 var jwtKey []byte
 
 func init() {
-	err := godotenv.Load("../../.env") // Adjust path as needed
+	err := godotenv.Load(".env") // Adjust path as needed
 	if err != nil {
 		fmt.Println("Warning: Error loading .env file in tests. Ensure environment variables are set.")
 	}
 	secret := os.Getenv("JWT_SECRET_KEY")
 	if secret == "" {
-		log.Println("CRITICAL: JWT_SECRET_KEY not found in environment variables during init.")
+		log.Println("CRITICAL: JWT_SECRET_KEY not found in environment variables during init in auth.go.")
 		return
 	}
 	jwtKey = []byte(secret)
@@ -115,14 +115,6 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	secret := os.Getenv("JWT_SECRET_KEY")
-	if secret == "" {
-		log.Println("CRITICAL: JWT_SECRET_KEY not found in environment variables.")
-		utils.SendJSONError(w, "User registered, but server configuration error prevented token generation.", http.StatusInternalServerError)
-		return
-	}
-	jwtKey = []byte(secret)
-
 	expirationTime := time.Now().Add(24 * time.Hour)
 	claims := &types.Claims{
 		UserID:    userIDHex,
@@ -158,11 +150,20 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	// Send a success message without the token in the body
+
+	// Send a success message with user data
 	response := map[string]interface{}{
 		"message":    "User Registered Successfully",
-		"insertedID": userIDHex,
-		// Do NOT include the token in the response body
+		"isLoggedIn": true,
+		"expiresAt":  expirationTime.Unix(),
+		"user": map[string]interface{}{
+			"id":        userIDHex,
+			"username":  newUser.Username,
+			"email":     newUser.Email,
+			"firstname": newUser.Firstname,
+			"lastname":  newUser.Lastname,
+			"isAdmin":   newUser.IsAdmin,
+		},
 	}
 	json.NewEncoder(w).Encode(response)
 	log.Printf("User registered: %s (Firstname: %s, Lastname: %s, Email: %s, UserID: %s)\n", newUser.Username, newUser.Firstname, newUser.Lastname, newUser.Email, userIDHex)
@@ -227,14 +228,6 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	secret := os.Getenv("JWT_SECRET_KEY")
-	if secret == "" {
-		log.Println("CRITICAL: JWT_SECRET_KEY not found in environment variables.")
-		utils.SendJSONError(w, "Server configuration error prevented token generation.", http.StatusInternalServerError)
-		return
-	}
-	jwtKey = []byte(secret)
-
 	expirationTime := time.Now().Add(24 * time.Hour)
 	claims := &types.Claims{
 		UserID:    foundUser.ID.Hex(),
@@ -270,11 +263,63 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	// Send a success message without the token in the body
-	response := map[string]string{
-		"message": "Login Successful",
-		// Do NOT include the token in the response body
+
+	// Send a success message with user data
+	response := map[string]interface{}{
+		"message":    "Login Successful",
+		"isLoggedIn": true,
+		"expiresAt":  expirationTime.Unix(),
+		"user": map[string]interface{}{
+			"id":        foundUser.ID.Hex(),
+			"username":  foundUser.Username,
+			"email":     foundUser.Email,
+			"firstname": foundUser.Firstname,
+			"lastname":  foundUser.Lastname,
+			"isAdmin":   foundUser.IsAdmin,
+		},
 	}
 	json.NewEncoder(w).Encode(response)
 	log.Printf("User logged in: %s (Email: %s)\n", foundUser.Username, foundUser.Email)
+}
+
+func AuthStatusHandler(w http.ResponseWriter, r *http.Request) {
+	cookie, err := r.Cookie("authToken")
+	// If no cookie, the user is not logged in
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK) // OK status, not an error
+		json.NewEncoder(w).Encode(map[string]interface{}{"isLoggedIn": false})
+		return
+	}
+
+	tokenStr := cookie.Value
+	claims := &types.Claims{}
+
+	token, err := jwt.ParseWithClaims(tokenStr, claims, func(token *jwt.Token) (interface{}, error) {
+		return jwtKey, nil
+	})
+
+	// If token is invalid or expired
+	if err != nil || !token.Valid {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK) // OK status, not an error
+		json.NewEncoder(w).Encode(map[string]interface{}{"isLoggedIn": false})
+		return
+	}
+
+	// Token is valid, so user is logged in
+	response := map[string]interface{}{
+		"isLoggedIn": true,
+		"user": map[string]interface{}{
+			"id":        claims.UserID,
+			"username":  claims.Username,
+			"email":     claims.Email,
+			"firstname": claims.Firstname,
+			"lastname":  claims.Lastname,
+			"isAdmin":   claims.IsAdmin,
+		},
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(response)
 }

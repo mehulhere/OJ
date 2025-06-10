@@ -1,6 +1,7 @@
 import Head from 'next/head';
 import { useState, ChangeEvent } from 'react';
 import '@/app/globals.css';
+import { useRouter } from 'next/navigation';
 
 interface RegisterResponse {
     message: string;
@@ -25,13 +26,17 @@ export default function Register() {
     const [isLoading, setIsLoading] = useState<boolean>(false);
     const [success, setSuccess] = useState<string | null>(null);
 
-    const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
-        event.preventDefault(); // Prevents default form submission
-        setIsLoading(true);
+    const router = useRouter();
+
+    const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+        e.preventDefault();
         setError(null);
+        setIsLoading(true);
         setSuccess(null);
+
+        // Simple validation
         if (password !== confirmPassword) {
-            setError('Passwords do not match');
+            setError("Passwords do not match.");
             setIsLoading(false);
             return;
         }
@@ -48,57 +53,43 @@ export default function Register() {
             return;
         }
 
-        const registrationData = {
+        const formData = {
             firstname,
             lastname,
             username,
-            email, // Include email if your backend is expecting it
+            email,
             password,
         };
 
         try {
             const response = await fetch('http://localhost:8080/register', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(registrationData),
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(formData),
+                credentials: 'include', // Important for HttpOnly cookie
             });
 
-            const responseData: RegisterResponse | ErrorResponse = await response.json();
+            const data = await response.json();
 
             if (!response.ok) {
-                const errorMessage = (responseData as ErrorResponse)?.message || `Error: ${response.status} - ${response.statusText}`;
-                setError(errorMessage);
-                setIsLoading(false);
-                return;
+                throw new Error(data.message || 'Registration failed.');
             }
 
-            if (response.ok) {
-                setSuccess(`User ${username} registered successfully!`);
-                console.log("registration successful");
-
-                // TODO: Redirect to a protected page or dashboard or login page
-                // router.push('/dashboard'); // Example redirect
-
-                // Clear form fields
-                setFirstname('');
-                setLastname('');
-                setUsername('');
-                setEmail('');
-                setPassword('');
-                setConfirmPassword('');
+            // On successful registration, the backend logs the user in
+            // and sends back the same response as the login endpoint.
+            if (data.user?.isAdmin) {
+                router.push('/admin/problems/create');
+            } else {
+                router.push('/');
             }
-            else {
-                const errorMessage = (responseData as ErrorResponse)?.message || `Registration failed with status: ${response.status}`;
-                setError(errorMessage);
-            }
-        } catch (error) {
-            console.error('Registration error:', error);
+
+        } catch (err: any) {
+            setError(err.message);
         } finally {
             setIsLoading(false);
         }
     };
+
     return (
         <>
             <Head>

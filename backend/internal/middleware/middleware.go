@@ -11,14 +11,19 @@ import (
 	"backend/internal/utils"
 
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/joho/godotenv"
 )
 
 var jwtKey []byte
 
 func init() {
+	err := godotenv.Load(".env")
+	if err != nil {
+		log.Println("WARNING: Error loading .env file in middleware.go.")
+	}
 	secret := os.Getenv("JWT_SECRET_KEY")
 	if secret == "" {
-		log.Println("CRITICAL: JWT_SECRET_KEY not found in environment variables during init.")
+		log.Println("CRITICAL: JWT_SECRET_KEY not found in environment variables during init in middleware.go.")
 		return
 	}
 	jwtKey = []byte(secret)
@@ -30,6 +35,7 @@ func WithCORS(next http.HandlerFunc) http.HandlerFunc {
 		w.Header().Set("Access-Control-Allow-Origin", "http://localhost:3000")
 		w.Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS, PUT, DELETE")
 		w.Header().Set("Access-Control-Allow-Headers", "Accept, Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization")
+		w.Header().Set("Access-Control-Allow-Credentials", "true")
 
 		if r.Method == "OPTIONS" {
 			w.WriteHeader(http.StatusOK)

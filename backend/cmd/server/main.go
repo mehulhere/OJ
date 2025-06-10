@@ -12,13 +12,11 @@ import (
 	"github.com/joho/godotenv"
 )
 
-var jwtKey []byte
-
 func main() {
 	// Load environment variables
-	err := godotenv.Load("../../../.env")
+	err := godotenv.Load(".env")
 	if err != nil {
-		log.Fatal("Error loading .env file")
+		log.Fatal("Error loading .env file in main.go")
 	}
 
 	// Get MongoDB URI from environment
@@ -39,18 +37,16 @@ func main() {
 	if secret == "" {
 		log.Fatal("JWT_SECRET_KEY not set in environment variables")
 	}
-	jwtKey = []byte(secret)
+	// jwtKey := []byte(secret)
 
 	// Define routes
 	http.HandleFunc("/register", middleware.WithCORS(handlers.RegisterHandler))
 	http.HandleFunc("/login", middleware.WithCORS(handlers.LoginHandler))
+	http.HandleFunc("/api/auth-status", middleware.WithCORS(handlers.AuthStatusHandler))
 	http.HandleFunc("/problems", middleware.WithCORS(handlers.GetProblemsHandler))
 	http.HandleFunc("/problems/", middleware.WithCORS(handlers.GetProblemHandler))
 	http.HandleFunc("/execute", middleware.JWTAuthMiddleware(middleware.WithCORS(handlers.ExecuteCodeHandler)))
-
-	// Admin routes
-	http.HandleFunc("/admin/problems", middleware.AdminAuthMiddleware(middleware.WithCORS(handlers.CreateProblemHandler)))
-	http.HandleFunc("/admin/testcases", middleware.AdminAuthMiddleware(middleware.WithCORS(handlers.AddTestCaseHandler)))
+	http.HandleFunc("/testcases", middleware.JWTAuthMiddleware(middleware.WithCORS(handlers.AddTestCaseHandler))) // Only for admins
 
 	// Start server
 	port := os.Getenv("PORT")

@@ -179,9 +179,16 @@ func TestRegisterHandler_Success(t *testing.T) {
 		t.Errorf("Unexpected success message: got %v", message)
 	}
 
-	insertedID, ok := responseBody["insertedID"].(string)
-	if !ok || insertedID == "" {
-		t.Errorf("Unexpected or empty insertedID: got %v", insertedID)
+	// Check if user data exists in the response
+	userData, ok := responseBody["user"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("User data not found in response")
+	}
+
+	// Check if user ID exists in the user data
+	userID, ok := userData["id"].(string)
+	if !ok || userID == "" {
+		t.Errorf("Unexpected or empty user ID: got %v", userID)
 	}
 
 	t.Log("TestRegisterHandler_Success passed")
@@ -227,56 +234,94 @@ func TestRegisterHandler_ValidationErrors(t *testing.T) {
 }
 
 func TestRegisterHandler_DuplicateUser(t *testing.T) {
-	// This test will first register a user, then attempt to register the same user again
-	// to check for the duplicate error.
-	uniqueSuffix := time.Now().UnixNano() // Ensure unique user for each full test run
-	regPayload := types.RegisterationPayload{
+	handler := http.HandlerFunc(middleware.WithCORS(RegisterHandler))
+
+	// Base payload for a unique user
+	uniqueSuffix := time.Now().UnixNano()
+	basePayload := types.RegisterationPayload{
 		Firstname: "Duplicate",
 		Lastname:  "Test",
 		Username:  fmt.Sprintf("duplicatetest_%d", uniqueSuffix),
 		Email:     fmt.Sprintf("duplicate_%d@example.com", uniqueSuffix),
 		Password:  "password123",
 	}
-	payloadBytes, _ := json.Marshal(regPayload)
 
-	// First attempt - should succeed
+	// First attempt - register the base user (should succeed)
+	payloadBytes, _ := json.Marshal(basePayload)
 	req1, err := http.NewRequest("POST", "/register", bytes.NewReader(payloadBytes))
 	if err != nil {
 		t.Fatal(err)
 	}
 	req1.Header.Set("Content-Type", "application/json")
 	rr1 := httptest.NewRecorder()
-	handler := http.HandlerFunc(middleware.WithCORS(RegisterHandler))
 	handler.ServeHTTP(rr1, req1)
 
 	if status := rr1.Code; status != http.StatusCreated {
-		t.Fatalf("First registration attempt failed: got status %v, want %v. Body: %s", status, http.StatusCreated, rr1.Body.String())
+		t.Fatalf("Setup: First registration attempt failed: got status %v, want %v. Body: %s", status, http.StatusCreated, rr1.Body.String())
 	}
+	t.Log("TestRegisterHandler_DuplicateUser setup: Base user registered successfully.")
 
-	// Second attempt with the same payload - should fail with Conflict
-	// Need to re-create the reader for the second request as the body of req1 was already read.
-	payloadBytes2, _ := json.Marshal(regPayload) // Re-marshal or ensure reader is fresh
-	req2, err := http.NewRequest("POST", "/register", bytes.NewReader(payloadBytes2))
-	if err != nil {
-		t.Fatal(err)
-	}
-	req2.Header.Set("Content-Type", "application/json")
-	rr2 := httptest.NewRecorder()
-	// handler is reusable
-	handler.ServeHTTP(rr2, req2)
+	t.Run("Duplicate Email", func(t *testing.T) {
+		// Attempt to register with a duplicate email but unique username
+		duplicateEmailPayload := types.RegisterationPayload{
+			Firstname: "Another",
+			Lastname:  "User",
+			Username:  fmt.Sprintf("anotheruser_%d", time.Now().UnixNano()), // Unique username
+			Email:     basePayload.Email,                                    // Duplicate email
+			Password:  "password123",
+		}
+		payloadBytes, _ := json.Marshal(duplicateEmailPayload)
+		req, err := http.NewRequest("POST", "/register", bytes.NewReader(payloadBytes))
+		if err != nil {
+			t.Fatal(err)
+		}
+		req.Header.Set("Content-Type", "application/json")
 
-	// Check the status code - expect Conflict
-	if status := rr2.Code; status != http.StatusConflict {
-		t.Errorf("handler returned wrong status code for duplicate user: got %v want %v. Body: %s",
-			status, http.StatusConflict, rr2.Body.String())
-	}
+		rr := httptest.NewRecorder()
+		handler.ServeHTTP(rr, req)
 
-	// Check for specific error message
-	var errorResponse map[string]string
-	json.Unmarshal(rr2.Body.Bytes(), &errorResponse)
-	if msg, ok := errorResponse["message"]; ok && !strings.Contains(strings.ToLower(msg), "already exists") {
-		t.Errorf("Unexpected error message for duplicate user: got '%s', expected to contain 'already exists'", msg)
-	}
+		if status := rr.Code; status != http.StatusConflict {
+			t.Errorf("Duplicate Email: handler returned wrong status code: got %v want %v. Body: %s",
+				status, http.StatusConflict, rr.Body.String())
+		}
+
+		var errorResponse map[string]string
+		json.Unmarshal(rr.Body.Bytes(), &errorResponse)
+		if msg, ok := errorResponse["message"]; ok && !strings.Contains(strings.ToLower(msg), "already exists") {
+			t.Errorf("Duplicate Email: Unexpected error message: got '%s', expected to contain 'already exists'", msg)
+		}
+	})
+
+	t.Run("Duplicate Username", func(t *testing.T) {
+		// Attempt to register with a duplicate username but unique email
+		duplicateUsernamePayload := types.RegisterationPayload{
+			Firstname: "Third",
+			Lastname:  "User",
+			Username:  basePayload.Username,                                           // Duplicate username
+			Email:     fmt.Sprintf("thirduser_%d@example.com", time.Now().UnixNano()), // Unique email
+			Password:  "password123",
+		}
+		payloadBytes, _ := json.Marshal(duplicateUsernamePayload)
+		req, err := http.NewRequest("POST", "/register", bytes.NewReader(payloadBytes))
+		if err != nil {
+			t.Fatal(err)
+		}
+		req.Header.Set("Content-Type", "application/json")
+
+		rr := httptest.NewRecorder()
+		handler.ServeHTTP(rr, req)
+
+		if status := rr.Code; status != http.StatusConflict {
+			t.Errorf("Duplicate Username: handler returned wrong status code: got %v want %v. Body: %s",
+				status, http.StatusConflict, rr.Body.String())
+		}
+
+		var errorResponse map[string]string
+		json.Unmarshal(rr.Body.Bytes(), &errorResponse)
+		if msg, ok := errorResponse["message"]; ok && !strings.Contains(strings.ToLower(msg), "already exists") {
+			t.Errorf("Duplicate Username: Unexpected error message: got '%s', expected to contain 'already exists'", msg)
+		}
+	})
 
 	t.Log("TestRegisterHandler_DuplicateUser passed")
 }

@@ -1,7 +1,7 @@
 import Head from 'next/head';
 import { useState, ChangeEvent, FormEvent } from 'react';
 import Link from 'next/link'; // For a link to the registration page
-// import { useRouter } from 'next/router'; // Uncomment to redirect after login
+import { useRouter } from 'next/router'; // Uncomment to redirect after login
 import '@/app/globals.css';
 
 // Assumed response structures from your backend
@@ -14,6 +14,7 @@ interface LoginSuccessResponse {
         email: string;
         firstname: string;
         lastname: string;
+        isAdmin: boolean;
     };
 }
 
@@ -29,12 +30,12 @@ export default function LoginPage() {
     const [isLoading, setIsLoading] = useState<boolean>(false);
     const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
-    // const router = useRouter(); // Uncomment to redirect after login
+    const router = useRouter(); // Uncomment to redirect after login
 
-    const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
-        event.preventDefault();
-        setIsLoading(true);
+    const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+        e.preventDefault();
         setError(null);
+        setIsLoading(true);
         setSuccessMessage(null);
 
         if (!usernameOrEmail || !password) {
@@ -49,45 +50,27 @@ export default function LoginPage() {
         };
 
         try {
-            const response = await fetch(`http://localhost:8080/login`, {
+            const response = await fetch('http://localhost:8080/login', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(loginData),
+                credentials: 'include', // Important to handle the HttpOnly cookie
             });
 
-            const responseData: LoginSuccessResponse | ErrorResponse = await response.json();
+            const data = await response.json();
 
             if (!response.ok) {
-                const errorMessage = (responseData as ErrorResponse)?.message || `Error: ${response.status} - ${response.statusText}`;
-                setError(errorMessage);
-                setIsLoading(false);
-                return;
+                throw new Error(data.message || 'Login failed. Please check your credentials.');
             }
 
-            // Backend now sets the JWT as an HTTP-only cookie.
-            // We don't need to extract the token from responseData.
-            // Just confirm the response was successful.
-            if (response.ok) { // Check for success status after handling non-ok
-                setSuccessMessage(responseData.message || 'Login successful!');
-                console.log('Login successful');
-
-                // TODO: Redirect to a protected page or dashboard
-                // router.push('/dashboard'); // Example redirect
-
-                // Clear form fields
-                setUsernameOrEmail('');
-                setPassword('');
-
+            // Redirect based on admin status from the response
+            if (data.user?.isAdmin) {
+                router.push('/admin/problems/create');
             } else {
-                // This case should technically be covered by !response.ok above,
-                // but as a fallback or for clarity:
-                const errorMessage = (responseData as ErrorResponse)?.message || `Login failed with status: ${response.status}`;
-                setError(errorMessage);
+                router.push('/');
             }
 
-        } catch (err) {
+        } catch (err: any) {
             console.error('Login request failed:', err);
             setError(err instanceof Error ? err.message : 'An unknown network or parsing error occurred.');
         } finally {

@@ -16,3 +16,4 @@ go run cmd/admin/create_admin.go "$1" "$2" "$3" "$4"
 cd -
 
 echo "Admin user creation process completed." 
+ 

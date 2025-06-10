@@ -1,0 +1,40 @@
+Test Case 1: WRONG_ANSWER
+Expected:
+[0,1]
+
+Actual:
+Sample output for python code
+With input: nums = [2,7,11,15], target = 9
+
+Test Case 2: WRONG_ANSWER
+Expected:
+[1,2]
+
+Actual:
+Sample output for python code
+With input: nums = [3,2,4], target = 6
+
+Test Case 3: WRONG_ANSWER
+Expected:
+[0,1]
+
+Actual:
+Sample output for python code
+With input: nums = [3,3], target = 6
+
+Test Case 4: WRONG_ANSWER
+Expected:
+[8,9]
+
+Actual:
+Sample output for python code
+With input: nums = [1,2,3,4,5,6,7,8,9,10], target = 19
+
+Test Case 5: WRONG_ANSWER
+Expected:
+[2,4]
+
+Actual:
+Sample output for python code
+With input: nums = [-1,-2,-3,-4,-5], target = -8
+

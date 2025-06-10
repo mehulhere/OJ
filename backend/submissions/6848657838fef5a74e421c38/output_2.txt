@@ -1,0 +1,2 @@
+Sample output for python code
+With input: nums = [3,2,4], target = 6

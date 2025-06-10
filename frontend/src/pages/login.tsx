@@ -60,7 +60,9 @@ export default function LoginPage() {
             const data = await response.json();
 
             if (!response.ok) {
-                throw new Error(data.message || 'Login failed. Please check your credentials.');
+                setError(data.message || 'Login failed. Please check your credentials.');
+                setIsLoading(false);
+                return;
             }
 
             // Redirect based on admin status from the response

@@ -84,3 +84,4 @@ When adding new features to the submission system, follow these patterns to crea
 ## Testing the Queue System
 
 The submission queue is designed to process submissions asynchronously. The tests use direct function calls to `processSubmission()` for deterministic testing, but in production, the queue is processed by a background goroutine. 
+ 

@@ -212,7 +212,7 @@ func processSubmission(submissionID primitive.ObjectID) {
 
 	// Get test cases for the problem
 	testCasesCollection := database.GetCollection("OJ", "test_cases")
-	cursor, err := testCasesCollection.Find(ctx, bson.M{"problem_id": submission.ProblemID})
+	cursor, err := testCasesCollection.Find(ctx, bson.M{"problem_db_id": problem.ID})
 	if err != nil {
 		log.Printf("Failed to retrieve test cases for problem %s: %v", submission.ProblemID, err)
 		updateSubmissionStatus(submissionID, models.StatusRuntimeError, 0, 0, 0, 0)
@@ -323,7 +323,27 @@ func processSubmission(submissionID primitive.ObjectID) {
 	if passedCount == totalCount {
 		finalStatus = models.StatusAccepted
 	} else {
-		finalStatus = models.StatusWrongAnswer
+		// Check if any test case had a specific error
+		// Read the test case status file to find the error type
+		testCaseStatusContent, err := ioutil.ReadFile(testCaseStatusPath)
+		if err == nil {
+			content := string(testCaseStatusContent)
+
+			if strings.Contains(content, "COMPILATION_ERROR") {
+				finalStatus = models.StatusCompilationError
+			} else if strings.Contains(content, "RUNTIME_ERROR") {
+				finalStatus = models.StatusRuntimeError
+			} else if strings.Contains(content, "TIME_LIMIT_EXCEEDED") {
+				finalStatus = models.StatusTimeLimitExceeded
+			} else if strings.Contains(content, "MEMORY_LIMIT_EXCEEDED") {
+				finalStatus = models.StatusMemoryLimitExceeded
+			} else {
+				finalStatus = models.StatusWrongAnswer
+			}
+		} else {
+			// Default to wrong answer if can't read the file
+			finalStatus = models.StatusWrongAnswer
+		}
 	}
 
 	// Update submission in database

@@ -17,6 +17,7 @@ type User struct {
 	Username  string `bson:"username" json:"username"` // Must be unique
 	Email     string `bson:"email" json:"email"`
 	Password  string `bson:"password" json:"-"`
+	IsAdmin   bool   `bson:"is_admin" json:"is_admin"` // Flag to identify admin users
 
 	CreatedAt time.Time `bson:"created_at" json:"created_at"`
 	UpdatedAt time.Time `bson:"updated_at" json:"updated_at"`

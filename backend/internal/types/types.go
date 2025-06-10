@@ -9,6 +9,7 @@ type Claims struct {
 	Email     string `json:"email"`
 	Firstname string `json:"firstname"`
 	Lastname  string `json:"lastname"`
+	IsAdmin   bool   `json:"is_admin"`
 	jwt.RegisteredClaims
 }
 

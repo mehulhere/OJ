@@ -1,2 +1,3 @@
 # Frontend has its own .env file
 backend/.env
+CODEBASE.md

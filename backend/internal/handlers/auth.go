@@ -130,6 +130,7 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request) {
 		Email:     newUser.Email,
 		Firstname: newUser.Firstname,
 		Lastname:  newUser.Lastname,
+		IsAdmin:   newUser.IsAdmin,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(expirationTime),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
@@ -241,6 +242,7 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 		Email:     foundUser.Email,
 		Firstname: foundUser.Firstname,
 		Lastname:  foundUser.Lastname,
+		IsAdmin:   foundUser.IsAdmin,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(expirationTime),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),

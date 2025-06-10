@@ -47,7 +47,10 @@ func main() {
 	http.HandleFunc("/problems", middleware.WithCORS(handlers.GetProblemsHandler))
 	http.HandleFunc("/problems/", middleware.WithCORS(handlers.GetProblemHandler))
 	http.HandleFunc("/execute", middleware.JWTAuthMiddleware(middleware.WithCORS(handlers.ExecuteCodeHandler)))
-	http.HandleFunc("/testcases", middleware.JWTAuthMiddleware(middleware.WithCORS(handlers.AddTestCaseHandler))) // Only for admins
+
+	// Admin routes
+	http.HandleFunc("/admin/problems", middleware.AdminAuthMiddleware(middleware.WithCORS(handlers.CreateProblemHandler)))
+	http.HandleFunc("/admin/testcases", middleware.AdminAuthMiddleware(middleware.WithCORS(handlers.AddTestCaseHandler)))
 
 	// Start server
 	port := os.Getenv("PORT")

@@ -2,11 +2,14 @@ package utils
 
 import (
 	"backend/internal/types"
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -28,58 +31,152 @@ func ParseInt(s string) (int, error) {
 // This is a simplified implementation - in a production environment, you would use
 // a sandboxed execution environment for security
 func ExecuteCode(ctx context.Context, req types.ExecutionRequest) (types.ExecutionResult, error) {
-	var _ *exec.Cmd // Using _ to ignore the unused variable
 	var result types.ExecutionResult
+	var err error
+	var cmd *exec.Cmd
 
-	// Create temporary files for the code and input
-	// In a real implementation, this would use proper temp files and cleanup
+	// Create temporary directory for execution
+	tempDir, err := os.MkdirTemp("", "codejudge-exec-*")
+	if err != nil {
+		return result, fmt.Errorf("failed to create temp directory: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	// Create a file for input if needed
+	inputPath := ""
+	if req.Input != "" {
+		inputPath = filepath.Join(tempDir, "input.txt")
+		if err := os.WriteFile(inputPath, []byte(req.Input), 0644); err != nil {
+			return result, fmt.Errorf("failed to write input file: %v", err)
+		}
+	}
 
 	// Set up command based on language
 	switch strings.ToLower(req.Language) {
 	case "python":
-		// For Python, we can execute directly with the code file
-		// cmd = exec.CommandContext(ctx, "python3", req.Code)
+		// For Python, write code to file and execute
+		scriptPath := filepath.Join(tempDir, "script.py")
+		if err := os.WriteFile(scriptPath, []byte(req.Code), 0644); err != nil {
+			return result, fmt.Errorf("failed to write Python code file: %v", err)
+		}
+		cmd = exec.CommandContext(ctx, "python3", scriptPath)
+
 	case "javascript":
-		// For JavaScript, we can use Node.js
-		// cmd = exec.CommandContext(ctx, "node", req.Code)
+		// For JavaScript, write code to file and execute with Node.js
+		scriptPath := filepath.Join(tempDir, "script.js")
+		if err := os.WriteFile(scriptPath, []byte(req.Code), 0644); err != nil {
+			return result, fmt.Errorf("failed to write JavaScript code file: %v", err)
+		}
+		cmd = exec.CommandContext(ctx, "node", scriptPath)
+
 	case "cpp":
-		// For C++, we need to compile and then execute
-		// This is simplified - real implementation would compile first
-		// cmd = exec.CommandContext(ctx, "g++", "-o", "temp_executable", req.Code, "&&", "./temp_executable")
+		// For C++, write code, compile, and execute
+		sourcePath := filepath.Join(tempDir, "source.cpp")
+		execPath := filepath.Join(tempDir, "executable")
+
+		if err := os.WriteFile(sourcePath, []byte(req.Code), 0644); err != nil {
+			return result, fmt.Errorf("failed to write C++ code file: %v", err)
+		}
+
+		// Compile first
+		compileCmd := exec.Command("g++", "-o", execPath, sourcePath)
+		compileOutput, err := compileCmd.CombinedOutput()
+		if err != nil {
+			return types.ExecutionResult{
+				Output:          string(compileOutput),
+				ExecutionTimeMs: 0,
+				MemoryUsedKB:    0,
+				Status:          "compilation_error",
+			}, fmt.Errorf("compilation error: %v", err)
+		}
+
+		cmd = exec.CommandContext(ctx, execPath)
+
 	case "java":
-		// For Java, we need to compile and then execute
-		// This is simplified - real implementation would handle class names
-		// cmd = exec.CommandContext(ctx, "javac", req.Code, "&&", "java", "Main")
+		// For Java, write code, compile, and execute
+		// This is simplified - should handle class name extraction
+		mainClass := "Main" // Assuming the main class is named "Main"
+		sourcePath := filepath.Join(tempDir, mainClass+".java")
+
+		if err := os.WriteFile(sourcePath, []byte(req.Code), 0644); err != nil {
+			return result, fmt.Errorf("failed to write Java code file: %v", err)
+		}
+
+		// Compile first
+		compileCmd := exec.Command("javac", sourcePath)
+		compileOutput, err := compileCmd.CombinedOutput()
+		if err != nil {
+			return types.ExecutionResult{
+				Output:          string(compileOutput),
+				ExecutionTimeMs: 0,
+				MemoryUsedKB:    0,
+				Status:          "compilation_error",
+			}, fmt.Errorf("compilation error: %v", err)
+		}
+
+		cmd = exec.CommandContext(ctx, "java", "-cp", tempDir, mainClass)
+
 	default:
 		return result, fmt.Errorf("unsupported language: %s", req.Language)
 	}
 
-	// In a real implementation, you would:
-	// 1. Write the code to a file
-	// 2. Compile if necessary
-	// 3. Execute with proper resource limits
-	// 4. Measure execution time and memory usage
-	// 5. Clean up temporary files
+	// Set up input/output
+	if req.Input != "" {
+		cmd.Stdin = strings.NewReader(req.Input)
+	}
 
-	// For this simplified version, we'll just return a mock result
-	// In a real implementation, you would capture stdout/stderr and measure resources
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	cmd.Dir = tempDir
 
+	// Measure execution time
 	startTime := time.Now()
 
-	// This is where you would actually run the command and capture output
-	// output, err := cmd.CombinedOutput()
+	// Run the command
+	runErr := cmd.Run()
 
-	// For now, let's simulate execution
-	time.Sleep(100 * time.Millisecond) // Simulate execution time
 	executionTime := time.Since(startTime).Milliseconds()
 
-	// For demonstration, return a mock result
-	// In a real implementation, this would be the actual output and measurements
-	result = types.ExecutionResult{
-		Output:          "Sample output for " + req.Language + " code\nWith input: " + req.Input,
-		ExecutionTimeMs: int(executionTime),
-		MemoryUsedKB:    1024, // Mock memory usage
-		Status:          "success",
+	// Prepare result
+	result.ExecutionTimeMs = int(executionTime)
+	result.MemoryUsedKB = 0 // We don't measure memory yet
+
+	// Combine stdout and stderr for the output
+	if stderr.Len() > 0 {
+		stderrStr := stderr.String()
+		result.Output = stderrStr
+
+		// For Python, better classify errors
+		if strings.ToLower(req.Language) == "python" {
+			// Check for common Python errors that should be treated as compilation errors
+			if strings.Contains(stderrStr, "SyntaxError") ||
+				strings.Contains(stderrStr, "IndentationError") ||
+				strings.Contains(stderrStr, "TabError") ||
+				strings.Contains(stderrStr, "NameError") || // Common typos like 'prinft' instead of 'print'
+				strings.Contains(stderrStr, "ImportError") ||
+				strings.Contains(stderrStr, "ModuleNotFoundError") {
+				result.Status = "compilation_error"
+			} else {
+				result.Status = "runtime_error"
+			}
+		} else {
+			result.Status = "runtime_error"
+		}
+	} else {
+		result.Output = stdout.String()
+		result.Status = "success"
+	}
+
+	// Handle timeout and other errors
+	if ctx.Err() == context.DeadlineExceeded {
+		result.Status = "time_limit_exceeded"
+		return result, fmt.Errorf("context deadline exceeded")
+	} else if runErr != nil {
+		// Check if it's a compilation error (should be caught earlier)
+		// or runtime error
+		result.Status = "runtime_error"
+		return result, runErr
 	}
 
 	return result, nil

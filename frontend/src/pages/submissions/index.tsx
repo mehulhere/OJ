@@ -258,11 +258,11 @@ export default function SubmissionsPage() {
                             <label htmlFor="status" className="block text-sm font-medium text-gray-700 mb-1">Status</label>
                             <select
                                 id="status"
-                                className="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border border-gray-300 rounded-md p-2"
+                                className="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border border-gray-300 rounded-md p-2 text-black"
                                 value={statusFilter}
                                 onChange={(e) => setStatusFilter(e.target.value)}
                             >
-                                <option value="all">All Statuses</option>
+                                <option value="all">All</option>
                                 <option value="ACCEPTED">Accepted</option>
                                 <option value="WRONG_ANSWER">Wrong Answer</option>
                                 <option value="TIME_LIMIT_EXCEEDED">Time Limit Exceeded</option>
@@ -278,7 +278,7 @@ export default function SubmissionsPage() {
                             <label htmlFor="language" className="block text-sm font-medium text-gray-700 mb-1">Language</label>
                             <select
                                 id="language"
-                                className="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border border-gray-300 rounded-md p-2"
+                                className="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border border-gray-300 rounded-md p-2 text-black"
                                 value={languageFilter}
                                 onChange={(e) => setLanguageFilter(e.target.value)}
                             >

@@ -1,3 +1,6 @@
 # Frontend has its own .env file
 backend/.env
 CODEBASE.md
+twosum_solution.py
+twosum_solution.js
+submissions/

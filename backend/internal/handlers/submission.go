@@ -300,6 +300,13 @@ func processSubmission(submissionID primitive.ObjectID) {
 			} else {
 				status += "RUNTIME_ERROR\n" + result.Output
 			}
+		} else if result.Status == "compilation_error" {
+			// Explicitly check for compilation errors from the result status
+			status += "COMPILATION_ERROR\n" + result.Output
+		} else if result.Status == "runtime_error" {
+			status += "RUNTIME_ERROR\n" + result.Output
+		} else if result.Status == "time_limit_exceeded" {
+			status += "TIME_LIMIT_EXCEEDED"
 		} else {
 			// Compare output (trim whitespace)
 			expectedOutput := strings.TrimSpace(testCase.ExpectedOutput)
@@ -328,6 +335,22 @@ func processSubmission(submissionID primitive.ObjectID) {
 		testCaseStatusContent, err := ioutil.ReadFile(testCaseStatusPath)
 		if err == nil {
 			content := string(testCaseStatusContent)
+			fmt.Println(content)
+
+			// Special handling for Python common errors - check for Python's error types directly in the output
+			if strings.Contains(strings.ToLower(submission.Language), "python") {
+				if strings.Contains(content, "NameError:") ||
+					strings.Contains(content, "SyntaxError:") ||
+					strings.Contains(content, "IndentationError:") ||
+					strings.Contains(content, "TabError:") ||
+					strings.Contains(content, "ImportError:") ||
+					strings.Contains(content, "ModuleNotFoundError:") {
+					finalStatus = models.StatusCompilationError
+					log.Printf("Classified Python error as COMPILATION_ERROR: %s", submission.ID.Hex())
+					updateSubmissionStatus(submissionID, finalStatus, maxExecutionTime, maxMemoryUsed, passedCount, totalCount)
+					return
+				}
+			}
 
 			if strings.Contains(content, "COMPILATION_ERROR") {
 				finalStatus = models.StatusCompilationError

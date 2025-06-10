@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/joho/godotenv"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"golang.org/x/crypto/bcrypt"
@@ -24,11 +25,16 @@ import (
 var jwtKey []byte
 
 func init() {
+	err := godotenv.Load("../../.env") // Adjust path as needed
+	if err != nil {
+		fmt.Println("Warning: Error loading .env file in tests. Ensure environment variables are set.")
+	}
 	secret := os.Getenv("JWT_SECRET_KEY")
 	if secret == "" {
 		log.Println("CRITICAL: JWT_SECRET_KEY not found in environment variables during init.")
 		return
 	}
+	jwtKey = []byte(secret)
 }
 func isValidEmail(email string) bool {
 	emailRegex := regexp.MustCompile(`^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`)

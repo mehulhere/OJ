@@ -1,22 +1,26 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
+	"backend/internal/database"
 	"backend/internal/middleware"
 	"backend/internal/models"
 
 	"github.com/joho/godotenv"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 func init() {
 	// Load environment variables for tests if not already loaded
-	err := godotenv.Load("../../../.env") // Adjust path as needed
+	err := godotenv.Load("../../.env") // Adjust path as needed
 	if err != nil {
 		fmt.Println("Warning: Error loading .env file in tests. Ensure environment variables are set.")
 	}
@@ -66,13 +70,47 @@ func TestGetProblemsHandler_Success(t *testing.T) {
 }
 
 func TestGetProblemHandler_Success(t *testing.T) {
-	// Note: This test requires a problem with a known problem_id or ObjectID to exist in the DB.
-	// You might need to insert a test problem as part of your test setup.
-	// Replace "test-problem-1" with an actual problem_id or ObjectID from your DB.
-	problemID := "test-problem-1"
-	// problemID := "60f1a4b9d2f0b9f8a9b2c3d4" // Example ObjectID
+	// Define a unique problem ID for this test run to ensure idempotency
+	// and allow cleanup.
+	testProblemIDString := fmt.Sprintf("test-problem-%d", time.Now().UnixNano())
 
-	req, err := http.NewRequest("GET", "/problems/"+problemID, nil)
+	// Setup: Insert a test problem into the database.
+	problemsCollection := database.GetCollection("OJ", "problems")
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	problemToInsert := models.Problem{
+		ID:              primitive.NewObjectID(), // Generate a new MongoDB ObjectID
+		ProblemID:       testProblemIDString,     // Custom string ID used by the handler path
+		Title:           "Test Problem for GetProblemHandler",
+		Statement:       "This is a test description.",
+		Difficulty:      "Easy",
+		Tags:            []string{"test", "dummy"},
+		ConstraintsText: "N > 0",
+		TimeLimitMs:     1000,
+		MemoryLimitMB:   256,
+		CreatedAt:       time.Now(),
+		UpdatedAt:       time.Now(),
+	}
+
+	_, err := problemsCollection.InsertOne(ctx, problemToInsert)
+	if err != nil {
+		t.Fatalf("Setup: Failed to insert test problem: %v", err)
+	}
+
+	// Cleanup: Ensure the test problem is deleted after the test.
+	t.Cleanup(func() {
+		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cleanupCancel()
+		_, delErr := problemsCollection.DeleteOne(cleanupCtx, primitive.M{"problem_id": testProblemIDString})
+		if delErr != nil {
+			t.Logf("Cleanup: Failed to delete test problem %s: %v", testProblemIDString, delErr)
+		} else {
+			t.Logf("Cleanup: Successfully deleted test problem %s", testProblemIDString)
+		}
+	})
+
+	req, err := http.NewRequest("GET", "/problems/"+testProblemIDString, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -106,11 +144,14 @@ func TestGetProblemHandler_Success(t *testing.T) {
 	}
 
 	// Optionally, check some fields of the retrieved problem
-	// if problem.ProblemID != problemID && problem.ID.Hex() != problemID {
-	// 	t.Errorf("Retrieved problem does not match requested ID/problem_id")
-	// }
+	if problem.ProblemID != testProblemIDString {
+		t.Errorf("Retrieved problem ProblemID does not match: got %s, want %s", problem.ProblemID, testProblemIDString)
+	}
+	if problem.Title != problemToInsert.Title {
+		t.Errorf("Retrieved problem Title does not match: got %s, want %s", problem.Title, problemToInsert.Title)
+	}
 
-	t.Logf("TestGetProblemHandler_Success passed for problem ID/ObjectID: %s", problemID)
+	t.Logf("TestGetProblemHandler_Success passed for problem ID: %s", testProblemIDString)
 }
 
 func TestGetProblemHandler_NotFound(t *testing.T) {

@@ -48,6 +48,11 @@ func main() {
 	http.HandleFunc("/execute", middleware.JWTAuthMiddleware(middleware.WithCORS(handlers.ExecuteCodeHandler)))
 	http.HandleFunc("/testcases", middleware.JWTAuthMiddleware(middleware.WithCORS(handlers.AddTestCaseHandler))) // Only for admins
 
+	// Submission routes
+	http.HandleFunc("/submissions", middleware.WithCORS(handlers.GetSubmissionsHandler))
+	http.HandleFunc("/submissions/", middleware.WithCORS(handlers.GetSubmissionDetailsHandler))
+	http.HandleFunc("/submit", middleware.JWTAuthMiddleware(middleware.WithCORS(handlers.SubmitSolutionHandler)))
+
 	// Start server
 	port := os.Getenv("PORT")
 	if port == "" {

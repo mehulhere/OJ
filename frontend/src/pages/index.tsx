@@ -144,10 +144,10 @@ export default function HomePage() {
 
     const difficultyColor = (difficulty: string) => {
         switch (difficulty.toLowerCase()) {
-            case 'easy': return 'text-green-500';
-            case 'medium': return 'text-yellow-500';
-            case 'hard': return 'text-red-500';
-            default: return 'text-gray-500';
+            case 'easy': return 'text-green-600 bg-green-100';
+            case 'medium': return 'text-yellow-600 bg-yellow-100';
+            case 'hard': return 'text-red-600 bg-red-100';
+            default: return 'text-gray-600 bg-gray-100';
         }
     };
 
@@ -235,7 +235,7 @@ export default function HomePage() {
                             <input
                                 type="text"
                                 id="search"
-                                className="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md"
+                                className="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border border-gray-300 rounded-md p-2"
                                 placeholder="Problem name or ID"
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
@@ -247,7 +247,7 @@ export default function HomePage() {
                             <label htmlFor="difficulty" className="block text-sm font-medium text-gray-700 mb-1">Difficulty</label>
                             <select
                                 id="difficulty"
-                                className="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md"
+                                className="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border border-gray-300 rounded-md p-2"
                                 value={selectedDifficulty}
                                 onChange={(e) => setSelectedDifficulty(e.target.value)}
                             >
@@ -264,7 +264,7 @@ export default function HomePage() {
                                 <label htmlFor="status" className="block text-sm font-medium text-gray-700 mb-1">Status</label>
                                 <select
                                     id="status"
-                                    className="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md"
+                                    className="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border border-gray-300 rounded-md p-2"
                                     value={selectedStatus}
                                     onChange={(e) => setSelectedStatus(e.target.value)}
                                 >
@@ -280,7 +280,7 @@ export default function HomePage() {
                             <label htmlFor="tag" className="block text-sm font-medium text-gray-700 mb-1">Tag</label>
                             <select
                                 id="tag"
-                                className="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md"
+                                className="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border border-gray-300 rounded-md p-2"
                                 value={selectedTag}
                                 onChange={(e) => setSelectedTag(e.target.value)}
                             >
@@ -347,14 +347,14 @@ export default function HomePage() {
                                                 </Link>
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm">
-                                                <span className={`${difficultyColor(problem.difficulty)} font-medium`}>
+                                                <span className={`${difficultyColor(problem.difficulty)} font-medium px-2 py-1 rounded-full`}>
                                                     {problem.difficulty}
                                                 </span>
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                                                 <div className="flex flex-wrap gap-1">
                                                     {problem.tags?.map((tag) => (
-                                                        <span key={tag} className="bg-blue-100 text-blue-800 text-xs font-medium px-2 py-0.5 rounded">
+                                                        <span key={tag} className="bg-blue-100 text-blue-800 text-xs font-semibold px-2.5 py-0.5 rounded-full border border-blue-200">
                                                             {tag}
                                                         </span>
                                                     ))}

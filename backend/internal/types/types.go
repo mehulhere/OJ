@@ -44,3 +44,19 @@ type ExecuteCodeResult struct {
 	Error           string `json:"error,omitempty"` // For errors in the execution service itself
 	Status          string `json:"status"`          // e.g., "success", "compile_error", "runtime_error", "timeout"
 }
+
+// ExecutionRequest defines the structure for a code execution request
+type ExecutionRequest struct {
+	Language    string `json:"language"`
+	Code        string `json:"code"`
+	Input       string `json:"input"`
+	TimeLimitMs int    `json:"time_limit_ms"`
+}
+
+// ExecutionResult defines the structure for a code execution result
+type ExecutionResult struct {
+	Output          string `json:"output"`
+	ExecutionTimeMs int    `json:"execution_time_ms"`
+	MemoryUsedKB    int    `json:"memory_used_kb"`
+	Status          string `json:"status"`
+}

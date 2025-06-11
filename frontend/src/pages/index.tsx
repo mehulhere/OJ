@@ -235,7 +235,7 @@ export default function HomePage() {
                             <input
                                 type="text"
                                 id="search"
-                                className="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border border-gray-300 rounded-md p-2"
+                                className="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border border-gray-300 rounded-md p-2 text-black"
                                 placeholder="Problem name or ID"
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
@@ -247,7 +247,7 @@ export default function HomePage() {
                             <label htmlFor="difficulty" className="block text-sm font-medium text-gray-700 mb-1">Difficulty</label>
                             <select
                                 id="difficulty"
-                                className="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border border-gray-300 rounded-md p-2"
+                                className="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border border-gray-300 rounded-md p-2 text-black"
                                 value={selectedDifficulty}
                                 onChange={(e) => setSelectedDifficulty(e.target.value)}
                             >
@@ -264,7 +264,7 @@ export default function HomePage() {
                                 <label htmlFor="status" className="block text-sm font-medium text-gray-700 mb-1">Status</label>
                                 <select
                                     id="status"
-                                    className="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border border-gray-300 rounded-md p-2"
+                                    className="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border border-gray-300 rounded-md p-2 text-black"
                                     value={selectedStatus}
                                     onChange={(e) => setSelectedStatus(e.target.value)}
                                 >
@@ -280,7 +280,7 @@ export default function HomePage() {
                             <label htmlFor="tag" className="block text-sm font-medium text-gray-700 mb-1">Tag</label>
                             <select
                                 id="tag"
-                                className="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border border-gray-300 rounded-md p-2"
+                                className="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border border-gray-300 rounded-md p-2 text-black"
                                 value={selectedTag}
                                 onChange={(e) => setSelectedTag(e.target.value)}
                             >

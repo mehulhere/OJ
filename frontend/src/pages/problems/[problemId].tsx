@@ -26,6 +26,17 @@ export default function SingleProblemPage() {
     const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
     const [submissionResult, setSubmissionResult] = useState<any>(null);
 
+    // Track test case results
+    const [testCaseResults, setTestCaseResults] = useState<{
+        stdout: string;
+        stderr: string;
+        status: string;
+        executionTimeMs: number;
+        error?: string;
+        testCase?: { input: string, expected?: string };
+    }[]>([]);
+    const [activeResultTab, setActiveResultTab] = useState<number>(0);
+
     // Test cases
     const [customTestCases, setCustomTestCases] = useState<{ input: string, expected?: string }[]>([{ input: '', expected: '' }]);
     const [activeTestCase, setActiveTestCase] = useState<number>(0);
@@ -121,19 +132,24 @@ export default function SingleProblemPage() {
         setIsExecuting(true);
         setOutput(null);
         setExecutionError(null);
+        setTestCaseResults([]);
+        setActiveResultTab(0);
 
         try {
-            console.log('Attempting to execute code with the following data:', {
-                url: 'http://localhost:8080/execute',
-                method: 'POST',
-                language: selectedLanguage,
-                codeLength: code.length,
-                stdin: testCaseInput
-            });
+            // Collect all test case inputs
+            const testCaseInputs = customTestCases
+                .map(tc => tc.input.trim())
+                .filter(input => input.length > 0);
+
+            if (testCaseInputs.length === 0) {
+                throw new Error("No test cases to run. Please add at least one test case with input.");
+            }
+
+            console.log(`Executing ${testCaseInputs.length} test cases in a single request`);
 
             // Create an AbortController for timeout
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+            const timeoutId = setTimeout(() => controller.abort(), 15000); // Longer timeout for multiple test cases
 
             try {
                 const response = await fetch('http://localhost:8080/execute', {
@@ -145,7 +161,7 @@ export default function SingleProblemPage() {
                     body: JSON.stringify({
                         language: selectedLanguage,
                         code: code,
-                        stdin: testCaseInput,
+                        testCases: testCaseInputs,
                     }),
                     signal: controller.signal
                 });
@@ -153,32 +169,85 @@ export default function SingleProblemPage() {
                 // Clear the timeout
                 clearTimeout(timeoutId);
 
-                console.log('Response received:', { status: response.status, statusText: response.statusText });
-
-                let responseBody;
-                try {
-                    const text = await response.text(); // Get raw text first for debugging
-                    console.log('Raw response:', text);
-
-                    try {
-                        responseBody = JSON.parse(text);
-                        console.log('Parsed response body:', responseBody);
-                    } catch (error) {
-                        const parseError = error as Error;
-                        console.error('JSON parse error on text:', text, parseError);
-                        throw new Error(`Failed to parse response as JSON: ${parseError.message}`);
-                    }
-                } catch (error) {
-                    const textError = error as Error;
-                    console.error('Error getting response text:', textError);
-                    throw new Error(`Failed to get response text: ${textError.message}`);
-                }
+                const text = await response.text();
+                const responseBody = JSON.parse(text);
 
                 if (!response.ok) {
                     throw new Error(responseBody.message || responseBody.error || `Request failed with status ${response.status}`);
                 }
 
-                setOutput(responseBody);
+                // Process results from the backend
+                const results = [];
+
+                if (responseBody.results && responseBody.results.length > 0) {
+                    // Process multiple test case results
+                    for (let i = 0; i < responseBody.results.length; i++) {
+                        const result = responseBody.results[i];
+                        const testCase = customTestCases[i] || { input: testCaseInputs[i], expected: '' };
+
+                        // Determine if the test case passed by comparing with expected output
+                        let status = result.status;
+                        if (status === 'success' && testCase.expected) {
+                            // Clean outputs for comparison (trim whitespace, normalize line endings)
+                            const cleanedActual = result.stdout.trim().replace(/\r\n/g, '\n');
+                            const cleanedExpected = testCase.expected.trim().replace(/\r\n/g, '\n');
+
+                            // Update status based on output comparison
+                            if (cleanedActual !== cleanedExpected) {
+                                status = 'wrong_answer';
+                            }
+                        }
+
+                        results.push({
+                            stdout: result.stdout || '',
+                            stderr: result.stderr || '',
+                            status: status,
+                            executionTimeMs: result.execution_time_ms || 0,
+                            error: result.error || '',
+                            testCase: testCase
+                        });
+                    }
+                } else {
+                    // Fallback for backward compatibility
+                    const testCase = customTestCases[0] || { input: testCaseInputs[0], expected: '' };
+
+                    // Determine if the test case passed by comparing with expected output
+                    let status = responseBody.status;
+                    if (status === 'success' && testCase.expected) {
+                        // Clean outputs for comparison
+                        const cleanedActual = responseBody.stdout.trim().replace(/\r\n/g, '\n');
+                        const cleanedExpected = testCase.expected.trim().replace(/\r\n/g, '\n');
+
+                        // Update status based on output comparison
+                        if (cleanedActual !== cleanedExpected) {
+                            status = 'wrong_answer';
+                        }
+                    }
+
+                    results.push({
+                        stdout: responseBody.stdout || '',
+                        stderr: responseBody.stderr || '',
+                        status: status,
+                        executionTimeMs: responseBody.execution_time_ms || 0,
+                        error: responseBody.error || '',
+                        testCase: testCase
+                    });
+                }
+
+                // Update state with all results
+                setTestCaseResults(results);
+
+                // If there's at least one result, set it as the current output for backward compatibility
+                if (results.length > 0) {
+                    setOutput({
+                        stdout: results[0].stdout,
+                        stderr: results[0].stderr,
+                        status: results[0].status,
+                        execution_time_ms: results[0].executionTimeMs,
+                        error: results[0].error
+                    });
+                }
+
             } catch (error: any) {
                 console.error('Fetch operation failed:', error);
                 if (error.name === 'AbortError') {
@@ -291,6 +360,16 @@ export default function SingleProblemPage() {
         updatedTestCases[activeTestCase] = {
             ...updatedTestCases[activeTestCase],
             input: value
+        };
+        setCustomTestCases(updatedTestCases);
+    };
+
+    // Update expected output for current active test case
+    const handleTestCaseExpectedChange = (value: string) => {
+        const updatedTestCases = [...customTestCases];
+        updatedTestCases[activeTestCase] = {
+            ...updatedTestCases[activeTestCase],
+            expected: value
         };
         setCustomTestCases(updatedTestCases);
     };
@@ -570,15 +649,30 @@ export default function SingleProblemPage() {
 
                         {/* Input/Output Area */}
                         <div className="flex-grow grid grid-cols-2 gap-4 p-4 overflow-auto">
-                            {/* Input */}
-                            <div className="flex flex-col">
-                                <p className="text-xs font-medium text-gray-700 mb-1">Input:</p>
-                                <textarea
-                                    className="flex-grow p-2 text-sm font-mono border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-indigo-500 text-gray-800"
-                                    value={testCaseInput}
-                                    onChange={(e) => handleTestCaseInputChange(e.target.value)}
-                                    placeholder="Enter input for this test case..."
-                                />
+                            <div className="space-y-4">
+                                {/* Input */}
+                                <div className="flex flex-col">
+                                    <p className="text-xs font-medium text-gray-700 mb-1">Input:</p>
+                                    <textarea
+                                        className="flex-grow p-2 text-sm font-mono border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-indigo-500 text-gray-800"
+                                        value={testCaseInput}
+                                        onChange={(e) => handleTestCaseInputChange(e.target.value)}
+                                        placeholder="Enter input for this test case..."
+                                        rows={3}
+                                    />
+                                </div>
+
+                                {/* Expected Output */}
+                                <div className="flex flex-col">
+                                    <p className="text-xs font-medium text-gray-700 mb-1">Expected Output:</p>
+                                    <textarea
+                                        className="flex-grow p-2 text-sm font-mono border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-indigo-500 text-gray-800"
+                                        value={customTestCases[activeTestCase]?.expected || ''}
+                                        onChange={(e) => handleTestCaseExpectedChange(e.target.value)}
+                                        placeholder="Enter expected output for verification..."
+                                        rows={3}
+                                    />
+                                </div>
                             </div>
 
                             {/* Output */}
@@ -586,23 +680,90 @@ export default function SingleProblemPage() {
                                 <p className="text-xs font-medium text-gray-700 mb-1">Output:</p>
                                 <div className="flex-grow p-2 text-sm font-mono border border-gray-300 rounded-md bg-gray-50 overflow-auto whitespace-pre-wrap text-gray-800">
                                     {isExecuting ? (
-                                        <div className="text-gray-600">Running code...</div>
+                                        <div className="text-gray-600">Running code against all test cases...</div>
                                     ) : executionError ? (
                                         <div className="text-red-600">{executionError}</div>
-                                    ) : output ? (
+                                    ) : testCaseResults.length > 0 ? (
                                         <>
-                                            {output.stdout}
-                                            {output.stderr && <div className="text-red-600 mt-2">{output.stderr}</div>}
-                                            {output.error && <div className="text-red-600 mt-2">{output.error}</div>}
-                                            {output.execution_time_ms !== undefined && (
-                                                <div className="text-xs text-gray-600 mt-2">
-                                                    Execution time: {output.execution_time_ms} ms
+                                            {/* Test Result Header */}
+                                            <div className="bg-gray-800 text-white p-2 flex items-center">
+                                                <div className="flex items-center">
+                                                    <span className={`w-2 h-2 rounded-full mr-2 ${testCaseResults.every(r => r.status === 'success')
+                                                        ? 'bg-green-500'
+                                                        : 'bg-red-500'
+                                                        }`}></span>
+                                                    <span className="font-medium">
+                                                        {testCaseResults.every(r => r.status === 'success')
+                                                            ? 'Accepted'
+                                                            : 'Failed'}
+                                                    </span>
                                                 </div>
-                                            )}
+                                                <div className="ml-4 text-xs text-gray-300">
+                                                    Runtime: {testCaseResults[activeResultTab]?.executionTimeMs || 0} ms
+                                                </div>
+                                            </div>
+
+                                            {/* Test Case Tabs */}
+                                            <div className="bg-gray-700 text-white px-2 pt-1 flex">
+                                                {testCaseResults.map((_, index) => (
+                                                    <button
+                                                        key={index}
+                                                        className={`px-3 py-1 text-xs mr-1 rounded-t ${activeResultTab === index
+                                                            ? 'bg-gray-50 text-gray-800'
+                                                            : 'bg-gray-600 text-gray-200 hover:bg-gray-500'
+                                                            }`}
+                                                        onClick={() => setActiveResultTab(index)}
+                                                    >
+                                                        <span className={`w-2 h-2 rounded-full inline-block mr-1 ${testCaseResults[index].status === 'success'
+                                                            ? 'bg-green-500'
+                                                            : 'bg-red-500'
+                                                            }`}></span>
+                                                        Case {index + 1}
+                                                    </button>
+                                                ))}
+                                            </div>
+
+                                            {/* Current Test Case Result */}
+                                            <div className="p-2 text-sm font-mono whitespace-pre-wrap flex-grow">
+                                                {testCaseResults[activeResultTab] && (
+                                                    <div className="space-y-2">
+                                                        {/* Output */}
+                                                        {testCaseResults[activeResultTab].stdout && (
+                                                            <div>
+                                                                <div className="font-semibold text-xs text-gray-700 mb-1">Your Output:</div>
+                                                                <div className="pl-2 border-l-2 border-green-400">
+                                                                    {testCaseResults[activeResultTab].stdout}
+                                                                </div>
+                                                            </div>
+                                                        )}
+
+                                                        {/* Error */}
+                                                        {(testCaseResults[activeResultTab].stderr || testCaseResults[activeResultTab].error) && (
+                                                            <div>
+                                                                <div className="font-semibold text-xs text-red-700 mb-1">Error:</div>
+                                                                <div className="pl-2 border-l-2 border-red-400 text-red-600">
+                                                                    {testCaseResults[activeResultTab].stderr || testCaseResults[activeResultTab].error}
+                                                                </div>
+                                                            </div>
+                                                        )}
+
+                                                        {/* Comparison Result */}
+                                                        {testCaseResults[activeResultTab].status === 'wrong_answer' && (
+                                                            <div className="mt-1 text-xs text-red-600">
+                                                                Your output does not match the expected output.
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                )}
+                                            </div>
                                         </>
                                     ) : submissionResult?.error ? (
                                         <div className="text-red-600">Submission error: {submissionResult.error}</div>
-                                    ) : null}
+                                    ) : (
+                                        <div className="text-gray-500">
+                                            Click "Run" to execute your code against all test cases.
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         </div>
@@ -621,8 +782,9 @@ export default function SingleProblemPage() {
                                 className="px-4 py-2 mr-3 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                                 onClick={handleRunCode}
                                 disabled={isExecuting || !isLoggedIn}
+                                title="Run your code against all test cases"
                             >
-                                {isExecuting ? 'Running...' : 'Run'}
+                                {isExecuting ? 'Running...' : `Run All Cases (${customTestCases.length})`}
                             </button>
                             <button
                                 className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 border border-transparent rounded-md shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"

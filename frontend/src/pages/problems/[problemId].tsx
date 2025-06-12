@@ -1,6 +1,6 @@
 import Head from 'next/head';
 import { useRouter } from 'next/router';
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import type { ProblemType, ApiError } from '@/types/problem'; // Adjust path
 import '@/app/globals.css';
@@ -41,6 +41,44 @@ export default function SingleProblemPage() {
     const [customTestCases, setCustomTestCases] = useState<{ input: string, expected?: string }[]>([{ input: '', expected: '' }]);
     const [activeTestCase, setActiveTestCase] = useState<number>(0);
     const [testCaseInput, setTestCaseInput] = useState<string>('');
+
+    // Persist code only after user changes or after remote fetch
+    const persistCode = (newCode: string) => {
+        if (!problemId) return;
+        const storageKey = `code_${problemId}_${selectedLanguage}`;
+        localStorage.setItem(storageKey, newCode);
+    };
+
+    // Helper: fetch last submitted code for this problem (user-specific)
+    const fetchLastSubmittedCode = useCallback(async () => {
+        if (!problemId || !isLoggedIn) return;
+        try {
+            const url = `http://localhost:8080/last-code?problem_id=${problemId}&language=${selectedLanguage}`;
+            const res = await fetch(url, { credentials: 'include' });
+            if (!res.ok) return;
+            const json = await res.json();
+            if (json.code) {
+                persistCode(json.code);
+                setCode(json.code);
+            }
+        } catch (err) {
+            console.error('Failed fetching last code', err);
+        }
+    }, [problemId, isLoggedIn, selectedLanguage]);
+
+    // On component mount / language change: load code from localStorage or backend
+    useEffect(() => {
+        if (!problemId) return;
+        const storageKey = `code_${problemId}_${selectedLanguage}`;
+        const savedCode = localStorage.getItem(storageKey);
+        if (savedCode !== null) {
+            setCode(savedCode);
+            // Already persisted
+        } else {
+            // Attempt to fetch from backend if user is logged in
+            fetchLastSubmittedCode();
+        }
+    }, [problemId, selectedLanguage, fetchLastSubmittedCode]);
 
     useEffect(() => {
         // Check login status
@@ -117,7 +155,9 @@ export default function SingleProblemPage() {
     }
 
     function handleEditorChange(value: string | undefined) {
-        setCode(value || '');
+        const newVal = value || '';
+        setCode(newVal);
+        persistCode(newVal);
     }
 
     const handleRunCode = async () => {

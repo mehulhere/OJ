@@ -78,6 +78,9 @@ func main() {
 	http.HandleFunc("/submissions/", middleware.WithCORS(handlers.GetSubmissionDetailsHandler))
 	http.HandleFunc("/submit", middleware.WithCORS(middleware.JWTAuthMiddleware(handlers.SubmitSolutionHandler)))
 
+	// Last code retrieval route
+	http.HandleFunc("/last-code", middleware.WithCORS(middleware.JWTAuthMiddleware(handlers.GetLastCodeHandler)))
+
 	// Start server
 	port := os.Getenv("PORT")
 	if port == "" {

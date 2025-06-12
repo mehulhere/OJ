@@ -61,6 +61,7 @@ func execHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func runCode(ctx context.Context, code, input string) (output, status string) {
+	log.Println("Running code...")
 	dir, _ := os.MkdirTemp("", "exec-*")
 	defer os.RemoveAll(dir)
 

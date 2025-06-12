@@ -33,6 +33,13 @@ type Submission struct {
 	TestCasesTotal  int                `json:"test_cases_total" bson:"test_cases_total"`
 }
 
+// Parse submission data
+type SubmissionData struct {
+	ProblemID string `json:"problem_id"`
+	Language  string `json:"language"`
+	Code      string `json:"code"`
+}
+
 // SubmissionListItem defines a simplified structure for listing submissions
 type SubmissionListItem struct {
 	ID              primitive.ObjectID `json:"id" bson:"_id,omitempty"`

@@ -8,7 +8,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
@@ -71,12 +70,7 @@ func SubmitSolutionHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Parse submission data
-	var submissionData struct {
-		ProblemID string `json:"problem_id"`
-		Language  string `json:"language"`
-		Code      string `json:"code"`
-	}
+	var submissionData models.SubmissionData
 
 	if err := json.NewDecoder(r.Body).Decode(&submissionData); err != nil {
 		utils.SendJSONError(w, "Invalid request payload", http.StatusBadRequest)
@@ -144,7 +138,7 @@ func SubmitSolutionHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Write code to file
 	codeFilePath := filepath.Join(submissionDir, "code"+fileExtension)
-	if err := ioutil.WriteFile(codeFilePath, []byte(submissionData.Code), 0644); err != nil {
+	if err := os.WriteFile(codeFilePath, []byte(submissionData.Code), 0644); err != nil {
 		log.Printf("Failed to write code file: %v", err)
 		utils.SendJSONError(w, "Failed to process submission", http.StatusInternalServerError)
 		return
@@ -190,7 +184,7 @@ func processSubmission(submissionID primitive.ObjectID) {
 
 	// Get submission details from database
 	submissionsCollection := database.GetCollection("OJ", "submissions")
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	var submission models.Submission
@@ -275,7 +269,7 @@ func processSubmission(submissionID primitive.ObjectID) {
 
 		// Write test case result to file
 		outputFilePath := filepath.Join(submissionDir, fmt.Sprintf("output_%d.txt", i+1))
-		if err := ioutil.WriteFile(outputFilePath, []byte(result.Output), 0644); err != nil {
+		if err := os.WriteFile(outputFilePath, []byte(result.Output), 0644); err != nil {
 			log.Printf("Failed to write output file: %v", err)
 		}
 
@@ -332,7 +326,7 @@ func processSubmission(submissionID primitive.ObjectID) {
 	} else {
 		// Check if any test case had a specific error
 		// Read the test case status file to find the error type
-		testCaseStatusContent, err := ioutil.ReadFile(testCaseStatusPath)
+		testCaseStatusContent, err := os.ReadFile(testCaseStatusPath)
 		if err == nil {
 			content := string(testCaseStatusContent)
 			fmt.Println(content)
@@ -406,7 +400,7 @@ func executeCode(ctx context.Context, language, codePath, input string, timeLimi
 	// For now, we'll just use the existing ExecuteCodeHandler logic but adapted for our needs
 
 	// Read the code file
-	codeBytes, err := ioutil.ReadFile(codePath)
+	codeBytes, err := os.ReadFile(codePath)
 	if err != nil {
 		return types.ExecutionResult{}, fmt.Errorf("failed to read code file: %v", err)
 	}
@@ -670,7 +664,7 @@ func GetSubmissionDetailsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	codeFilePath := filepath.Join(submissionDir, "code"+fileExtension)
-	code, err := ioutil.ReadFile(codeFilePath)
+	code, err := os.ReadFile(codeFilePath)
 	if err != nil {
 		log.Printf("Failed to read code file: %v", err)
 		code = []byte("// Code file not found")
@@ -678,7 +672,7 @@ func GetSubmissionDetailsHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Read test case status if available
 	testCaseStatusPath := filepath.Join(submissionDir, "testcasesStatus.txt")
-	testCaseStatus, err := ioutil.ReadFile(testCaseStatusPath)
+	testCaseStatus, err := os.ReadFile(testCaseStatusPath)
 	if err != nil {
 		log.Printf("Failed to read test case status file: %v", err)
 		testCaseStatus = []byte("Test case results not available")

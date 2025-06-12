@@ -3,16 +3,10 @@ package handlers
 import (
 	"backend/internal/types"
 	"backend/internal/utils"
-	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
 	"log"
 	"net/http"
-	"os"
-	"os/exec"
-	"path/filepath"
-	"strings"
 	"time"
 )
 
@@ -65,85 +59,55 @@ func ExecuteCodeHandler(w http.ResponseWriter, r *http.Request) {
 	// Default error in case a language isn't handled, or early exit
 	result.Error = "Language not supported or internal error before execution: " + payload.Language
 
-	// Create temp directory for code execution
-	tempDir, err := os.MkdirTemp("", "codejudge-"+payload.Language+"-*")
-	if err != nil {
-		log.Println("Failed to create temp dir:", err)
-		utils.SendJSONError(w, "Server error creating execution environment.", http.StatusInternalServerError)
-		return
-	}
-	defer os.RemoveAll(tempDir)
-
-	// Write code to file based on language
-	var scriptPath string
-	switch payload.Language {
-	case "python":
-		scriptPath = filepath.Join(tempDir, "script.py")
-	case "javascript":
-		scriptPath = filepath.Join(tempDir, "script.js")
-	case "cpp":
-		scriptPath = filepath.Join(tempDir, "script.cpp")
-	case "java":
-		scriptPath = filepath.Join(tempDir, "Main.java")
-	default:
-		utils.SendJSONError(w, "Unsupported language: "+payload.Language, http.StatusBadRequest)
-		return
-	}
-
-	if err := os.WriteFile(scriptPath, []byte(payload.Code), 0644); err != nil {
-		log.Println("Failed to write code to temp file:", err)
-		utils.SendJSONError(w, "Server error preparing code for execution.", http.StatusInternalServerError)
-		return
-	}
-
-	// Compile code if needed (for C++ and Java)
-	if payload.Language == "cpp" || payload.Language == "java" {
-		var compileCmd *exec.Cmd
-		var compileOutput bytes.Buffer
-
-		if payload.Language == "cpp" {
-			execPath := filepath.Join(tempDir, "executable")
-			compileCmd = exec.Command("g++", "-o", execPath, scriptPath)
-		} else { // Java
-			compileCmd = exec.Command("javac", scriptPath)
-		}
-
-		compileCmd.Stdout = &compileOutput
-		compileCmd.Stderr = &compileOutput
-
-		if err := compileCmd.Run(); err != nil {
-			result.Status = "compilation_error"
-			result.Stderr = compileOutput.String()
-			result.Error = ""
-
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusOK)
-			json.NewEncoder(w).Encode(result)
-			return
-		}
-	}
-
-	// Execute each test case
-	var totalExecutionTime int64
-	maxExecutionTime := int64(0)
+	// Execute each test case using the external executor service
+	const defaultTimeLimitMs = 5000
+	var maxExecutionTime int64
 	hasError := false
 
 	for _, testInput := range testCases {
-		testResult := executeTestCase(payload.Language, scriptPath, tempDir, testInput)
+		// Prepare execution request
+		execReq := types.ExecutionRequest{
+			Language:    payload.Language,
+			Code:        payload.Code,
+			Input:       testInput,
+			TimeLimitMs: defaultTimeLimitMs,
+		}
+
+		// Give a little buffer over the requested time limit
+		execCtx, cancel := context.WithTimeout(r.Context(), time.Duration(defaultTimeLimitMs+2000)*time.Millisecond)
+		execResult, err := utils.ExecuteCode(execCtx, execReq)
+		cancel()
+
+		// Map executor result to API response structure
+		testCaseRes := types.TestCaseResult{
+			Stdout:          "",
+			Stderr:          "",
+			ExecutionTimeMs: int64(execResult.ExecutionTimeMs),
+			Status:          execResult.Status,
+		}
+
+		if execResult.Status == "success" {
+			testCaseRes.Stdout = execResult.Output
+		} else {
+			testCaseRes.Stderr = execResult.Output
+		}
+
+		if err != nil {
+			testCaseRes.Error = err.Error()
+		}
 
 		// Track execution stats
-		totalExecutionTime += testResult.ExecutionTimeMs
-		if testResult.ExecutionTimeMs > maxExecutionTime {
-			maxExecutionTime = testResult.ExecutionTimeMs
+		if testCaseRes.ExecutionTimeMs > maxExecutionTime {
+			maxExecutionTime = testCaseRes.ExecutionTimeMs
 		}
 
 		// Track if any test case had an error
-		if testResult.Status != "success" {
+		if testCaseRes.Status != "success" {
 			hasError = true
 		}
 
 		// Add to results array
-		result.Results = append(result.Results, testResult)
+		result.Results = append(result.Results, testCaseRes)
 	}
 
 	// Set overall result based on the first test case for backward compatibility
@@ -167,69 +131,4 @@ func ExecuteCodeHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	log.Printf("Code execution: lang=%s, status=%s, time=%dms, test_cases=%d",
 		payload.Language, result.Status, maxExecutionTime, len(testCases))
-}
-
-// Helper function to execute a single test case
-func executeTestCase(language, scriptPath, tempDir, input string) types.TestCaseResult {
-	result := types.TestCaseResult{
-		Status: "processing",
-	}
-
-	var cmd *exec.Cmd
-	var timeout time.Duration
-
-	switch language {
-	case "python":
-		cmd = exec.Command("python3", scriptPath)
-		timeout = 2 * time.Second
-	case "javascript":
-		cmd = exec.Command("node", scriptPath)
-		timeout = 10 * time.Second
-	case "cpp":
-		execPath := filepath.Join(tempDir, "executable")
-		cmd = exec.Command(execPath)
-		timeout = 2 * time.Second
-	case "java":
-		cmd = exec.Command("java", "-cp", tempDir, "Main")
-		timeout = 5 * time.Second
-	default:
-		result.Status = "error"
-		result.Error = "Unsupported language"
-		return result
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-	cmd = exec.CommandContext(ctx, cmd.Path, cmd.Args[1:]...)
-
-	cmd.Stdin = strings.NewReader(input)
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-
-	startTime := time.Now()
-	runErr := cmd.Run()
-	executionTime := time.Since(startTime).Milliseconds()
-
-	result.Stdout = stdout.String()
-	result.Stderr = stderr.String()
-	result.ExecutionTimeMs = executionTime
-
-	if ctx.Err() == context.DeadlineExceeded {
-		result.Status = "time_limit_exceeded"
-		if result.Stderr == "" {
-			result.Stderr = fmt.Sprintf("Execution timed out after %d seconds.", int(timeout.Seconds()))
-		} else {
-			result.Stderr += fmt.Sprintf("\nExecution timed out after %d seconds.", int(timeout.Seconds()))
-		}
-	} else if runErr != nil {
-		result.Status = "runtime_error"
-		if result.Stderr == "" {
-			result.Stderr = runErr.Error()
-		}
-	} else {
-		result.Status = "success"
-	}
-
-	return result
 }

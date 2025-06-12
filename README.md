@@ -42,6 +42,11 @@ This is an Online Judge platform for competitive programming practice and contes
    npm run dev
    ```
 
+5. Start the docker image
+   ```
+   docker compose up -d                     # start/continue all services
+   ```
+
 ## Creating an Admin User
 
 To create an admin user, run the following command from the root directory of the project:
